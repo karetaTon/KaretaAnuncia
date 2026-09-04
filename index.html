@@ -192,6 +192,73 @@
     color: var(--ink-soft);
     margin: 0 0 1.8rem;
   }
+  .contact-form {
+    max-width: 480px;
+    margin: 0 auto;
+    text-align: left;
+  }
+  .form-row {
+    margin-bottom: 1.1rem;
+  }
+  .form-row label {
+    display: block;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--ink-soft);
+    margin-bottom: 0.35rem;
+  }
+  .form-row input,
+  .form-row textarea {
+    width: 100%;
+    padding: 0.75rem 0.85rem;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--panel);
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.98rem;
+    resize: vertical;
+  }
+  .form-row input:focus,
+  .form-row textarea:focus {
+    outline: none;
+    border-color: var(--clay);
+  }
+  .form-submit {
+    width: 100%;
+    border: none;
+    cursor: pointer;
+    font: inherit;
+  }
+  .form-status {
+    margin: 0.9rem 0 0;
+    font-size: 0.92rem;
+    min-height: 1.2em;
+  }
+  .form-status.success { color: var(--olive); }
+  .form-status.error { color: var(--clay-dark); }
+
+  .contact-email {
+    font-size: 0.98rem;
+    color: var(--ink-soft);
+    margin: 0.9rem 0 0;
+  }
+  .contact-email a {
+    color: var(--clay-dark);
+    text-decoration: none;
+    border-bottom: 1px solid var(--clay-dark);
+  }
+  .copy-btn {
+    background: none;
+    border: none;
+    color: var(--clay-dark);
+    font: inherit;
+    cursor: pointer;
+    padding: 0;
+    margin-left: 0.4rem;
+    text-decoration: underline;
+    font-size: 0.9rem;
+  }
   .social-row {
     margin-top: 1.6rem;
     display: flex;
@@ -223,7 +290,7 @@
   <div class="wrap header-inner">
     <a class="logo" href="#top">Kareta <span>Anuncia</span></a>
     <nav>
-      <a class="nav-cta" href="mailto:karetaanuncia@gmail.com">Hablemos</a>
+      <a class="nav-cta" href="#contacto">Hablemos</a>
     </nav>
   </div>
 </header>
@@ -237,7 +304,7 @@
       talleres, gasolineras, concesionarios y comercios de toda la Región.
     </p>
     <div class="hero-actions">
-      <a class="btn btn-primary" href="mailto:karetaanuncia@gmail.com">Pide tu propuesta</a>
+      <a class="btn btn-primary" href="#contacto">Pide tu propuesta</a>
     </div>
   </section>
 
@@ -264,11 +331,31 @@
     </div>
   </section>
 
-  <section class="contact-block wrap">
+  <section class="contact-block wrap" id="contacto">
     <h2>Hablemos de tu negocio</h2>
     <p>Cuéntanos qué necesitas y te respondemos en menos de 48 horas.</p>
-    <a class="btn btn-primary" href="mailto:karetaanuncia@gmail.com">Escríbenos</a>
-    <p class="contact-email">O escríbenos directamente a <a href="mailto:karetaanuncia@gmail.com">karetaanuncia@gmail.com</a></p>
+
+    <form class="contact-form" action="https://formspree.io/f/xrpglqrw" method="POST">
+      <div class="form-row">
+        <label for="name">Nombre</label>
+        <input type="text" id="name" name="name" maxlength="100" placeholder="Tu nombre">
+      </div>
+      <div class="form-row">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" required placeholder="tu@email.com">
+      </div>
+      <div class="form-row">
+        <label for="message">Mensaje</label>
+        <textarea id="message" name="message" maxlength="2000" rows="4" placeholder="Cuéntanos sobre tu negocio y qué necesitas"></textarea>
+      </div>
+      <button type="submit" class="btn btn-primary form-submit">Enviar mensaje</button>
+      <p class="form-status" id="formStatus" role="status"></p>
+    </form>
+
+    <p class="contact-email">
+      O escríbenos directamente a <a href="mailto:karetaanuncia@gmail.com" id="emailLink">karetaanuncia@gmail.com</a>
+      <button class="copy-btn" id="copyEmailBtn" type="button">copiar</button>
+    </p>
     <div class="social-row">
       <a href="https://instagram.com/karetabyte" target="_blank" rel="noopener">Instagram</a>
       <a href="https://www.facebook.com/profile.php?id=61578499139505" target="_blank" rel="noopener">Facebook</a>
@@ -279,6 +366,54 @@
 <footer>
   © 2026 Kareta Anuncia. Todos los derechos reservados.
 </footer>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    var form = document.querySelector('.contact-form');
+    var statusEl = document.getElementById('formStatus');
+    if (form) {
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var submitBtn = form.querySelector('.form-submit');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Enviando...';
+        statusEl.textContent = '';
+        statusEl.className = 'form-status';
+
+        fetch(form.action, {
+          method: 'POST',
+          body: new FormData(form),
+          headers: { 'Accept': 'application/json' }
+        }).then(function(response) {
+          if (response.ok) {
+            statusEl.textContent = 'Mensaje enviado. Te responderemos en menos de 48 horas.';
+            statusEl.className = 'form-status success';
+            form.reset();
+          } else {
+            statusEl.textContent = 'No se ha podido enviar. Prueba a escribirnos por email.';
+            statusEl.className = 'form-status error';
+          }
+        }).catch(function() {
+          statusEl.textContent = 'No se ha podido enviar. Prueba a escribirnos por email.';
+          statusEl.className = 'form-status error';
+        }).finally(function() {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Enviar mensaje';
+        });
+      });
+    }
+
+    var copyBtn = document.getElementById('copyEmailBtn');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', function() {
+        navigator.clipboard.writeText('karetaanuncia@gmail.com').then(function() {
+          copyBtn.textContent = '¡copiado!';
+          setTimeout(function() { copyBtn.textContent = 'copiar'; }, 2000);
+        });
+      });
+    }
+  });
+</script>
 
 </body>
 </html>
