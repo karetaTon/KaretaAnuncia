@@ -1,0 +1,83 @@
+name: Gemini Code Reviewer
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Instalar SDK de Gemini y Octokit
+        run: |
+          npm install @google/genai @actions/github
+
+      - name: Analizar código con Gemini y comentar en el PR
+        uses: actions/github-script@v7
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        with:
+          script: |
+            const { execSync } = require('child_process');
+            const { GoogleGenAI } = require('@google/genai');
+
+            const baseBranch = context.payload.pull_request.base.ref;
+            let diff = '';
+            try {
+              diff = execSync(`git diff origin/${baseBranch}...HEAD`, { encoding: 'utf-8' });
+            } catch (err) {
+              console.error('Error obteniendo diff:', err);
+              return;
+            }
+
+            if (!diff.trim()) {
+              console.log('No hay cambios de código para revisar.');
+              return;
+            }
+
+            const truncatedDiff = diff.slice(0, 40000);
+            const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+            
+            const prompt = `Actúa como un Senior Software Engineer revisando un Pull Request.
+Analiza la siguiente diferencia de código (git diff) y proporciona una revisión constructiva en Markdown:
+- Resumen breve de los cambios.
+- Posibles bugs, errores lógicos o fugas de memoria.
+- Vulnerabilidades o malas prácticas de seguridad.
+- Sugerencias claras de mejora o refactorización.
+
+Si el código es óptimo y no hay problemas graves, indícalo brevemente con un mensaje de aprobación.
+
+Git Diff:
+\`\`\`diff
+${truncatedDiff}
+\`\`\``;
+
+            console.log('Enviando diff a Gemini...');
+            const response = await ai.models.generateContent({
+              model: 'gemini-2.5-flash',
+              contents: prompt,
+            });
+
+            const reviewComment = `### 🤖 Revisión de Código por Gemini\n\n${response.text}`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: reviewComment
+            });
+            console.log('Comentario publicado exitosamente en el PR.');
