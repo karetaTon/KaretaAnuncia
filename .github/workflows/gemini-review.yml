@@ -2,7 +2,7 @@ name: Gemini Code Reviewer
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, reopened]
 
 jobs:
   review:
@@ -17,23 +17,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Configurar Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Instalar SDK de Gemini y Octokit
-        run: |
-          npm install @google/genai @actions/github
-
-      - name: Analizar código con Gemini y comentar en el PR
+      - name: Analizar codigo con Gemini y comentar
         uses: actions/github-script@v7
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         with:
           script: |
             const { execSync } = require('child_process');
-            const { GoogleGenAI } = require('@google/genai');
 
             const baseBranch = context.payload.pull_request.base.ref;
             let diff = '';
@@ -45,39 +35,52 @@ jobs:
             }
 
             if (!diff.trim()) {
-              console.log('No hay cambios de código para revisar.');
+              console.log('No hay cambios para revisar.');
               return;
             }
 
-            const truncatedDiff = diff.slice(0, 40000);
-            const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-            
-            const prompt = `Actúa como un Senior Software Engineer revisando un Pull Request.
-Analiza la siguiente diferencia de código (git diff) y proporciona una revisión constructiva en Markdown:
-- Resumen breve de los cambios.
-- Posibles bugs, errores lógicos o fugas de memoria.
-- Vulnerabilidades o malas prácticas de seguridad.
-- Sugerencias claras de mejora o refactorización.
+            const truncatedDiff = diff.slice(0, 30000);
+            const apiKey = process.env.GEMINI_API_KEY;
 
-Si el código es óptimo y no hay problemas graves, indícalo brevemente con un mensaje de aprobación.
+            if (!apiKey) {
+              core.setFailed('Falta el secret GEMINI_API_KEY en la configuracion del repositorio.');
+              return;
+            }
 
-Git Diff:
-\`\`\`diff
-${truncatedDiff}
-\`\`\``;
+            const promptText = [
+              "Actua como un Senior Software Engineer revisando un Pull Request.",
+              "Analiza el siguiente git diff y da una revision breve y clara en Markdown:",
+              "- Resumen de los cambios.",
+              "- Posibles bugs o mejoras.",
+              "",
+              "Git Diff:",
+              truncatedDiff
+            ].join("\n");
 
-            console.log('Enviando diff a Gemini...');
-            const response = await ai.models.generateContent({
-              model: 'gemini-2.5-flash',
-              contents: prompt,
+            const url = `[https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$](https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$){apiKey}`;
+
+            const response = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: promptText }] }]
+              })
             });
 
-            const reviewComment = `### 🤖 Revisión de Código por Gemini\n\n${response.text}`;
+            const data = await response.json();
+
+            if (!response.ok) {
+              console.error('Error de la API de Gemini:', JSON.stringify(data));
+              core.setFailed('Error al llamar a la API de Gemini');
+              return;
+            }
+
+            const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No se pudo generar respuesta.';
+            const body = `### 🤖 Revisión de Código por Gemini\n\n${aiText}`;
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
-              body: reviewComment
+              body: body
             });
-            console.log('Comentario publicado exitosamente en el PR.');
